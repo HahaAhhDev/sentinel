@@ -32,8 +32,10 @@ Writes `.sentinel/baseline.db` plus clean copies in `.sentinel/vault`. Skips `.g
 Scaffold config if you want flags in a file:
 
 ```bash
-sentinel config-init
+sentinel config-init --profile home
 ```
+
+Profiles: home, server, uploads, paranoid. Server and up block on their own.
 
 ## 3. Check
 
@@ -64,10 +66,10 @@ Scores 0 to 100. `why` explains one file.
 ## 6. Watch
 
 ```bash
-sentinel watch ~/Documents
+sentinel watch ~/Documents --response auto
 ```
 
-Leave it running. Touch `.sentinel/canary.txt` in another shell to see it fire. Ctrl-c stops. Add `--daemon` to bg it.
+warn only yells, auto kills unknown writers and jails them, paranoid freezes the rest. Leave it running. Touch `passwords.txt` in another shell to see a canary fire. Ctrl-c stops. `--daemon` bgs it on unix, `win-task --create` keeps it on Windows.
 
 Tune first:
 
@@ -79,14 +81,24 @@ sentinel learn ~/Documents --secs 60
 
 ```bash
 sentinel protect . --restore-clean all
-sentinel snaps .
+sentinel quar .
 ```
 
-Vault brings clean back. Quarantine keeps post hit copies for forensics.
+Vault brings pre hit copies back, newest version first. Quarantine keeps post hit copies plus jailed binaries for forensics.
+
+## 8. Harden the box
+
+```bash
+sentinel harden ~/Documents
+```
+
+One pass: canaries, autostart entries, odd connections, drift, tier. Clean what it flags.
 
 ## Next
 
-- read `CONFIG.md` for yaml
+- read `CONFIG.md` for yaml and profiles
 - read `RULES.md` to tune burst and entropy
+- read `PROTECTION.md` for tiers and rollback
+- read `WINDOWS.md` on Windows
 - read `CLI.md` for all flags
 - read `WEB.md` for serve and pages

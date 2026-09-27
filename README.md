@@ -57,7 +57,7 @@ cd sentinel
 pip install -e .
 ```
 
-Needs Python 3.10+. Pulls `watchdog`, `typer`, `rich`, `pyyaml`, `psutil`. Dev extras add `pytest`, `mkdocs`, `mkdocs-material`.
+Needs Python 3.10+. Pulls `watchdog`, `typer`, `rich`, `pyyaml`, `psutil`. Dev extras add `pytest`, `mkdocs`, `mkdocs-material`, `build`, `twine`.
 
 ## Quickstart
 
