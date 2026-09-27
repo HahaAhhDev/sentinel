@@ -11,7 +11,7 @@ Tiny folder watchdog that spots ransomware-like behavior. Baseline it, watch it,
 Docs site: https://hahaahhdev.github.io/sentinel/
 
 ```
-pip install sentinel
+pip install sentinel-watch
 sentinel init ~/Documents
 sentinel watch ~/Documents
 ```
@@ -44,6 +44,12 @@ sentinel report ./demo_run --out report.html
 You get entropy, file scores, and a risk line like `risk warn 55`. Open `report.html` for the pretty page.
 
 ## Install
+
+```bash
+pip install sentinel-watch
+```
+
+From source:
 
 ```bash
 git clone https://github.com/HahaAhhDev/sentinel

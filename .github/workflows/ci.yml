@@ -16,6 +16,20 @@ jobs:
         with:
           name: sentinel-findings
           path: findings.json
+  pack:
+    # dry run of packaging, no upload
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check dist/*
+      - run: pip install dist/*.whl --force-reinstall -q
+      - run: sentinel --help
+      - run: python -c "import sentinel; print(sentinel.__version__)"
   docs:
     runs-on: ubuntu-latest
     steps:

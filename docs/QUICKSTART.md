@@ -5,11 +5,17 @@ Five minutes from zero to watching.
 ## 1. Install
 
 ```bash
+pip install sentinel-watch
+sentinel --help
+sentinel doctor .
+```
+
+Or from source:
+
+```bash
 git clone https://github.com/HahaAhhDev/sentinel
 cd sentinel
 pip install -e .
-sentinel --help
-sentinel doctor .
 ```
 
 `doctor` checks perms, watchdog, config, baseline.

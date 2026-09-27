@@ -1,11 +1,26 @@
 [project]
-name = "sentinel"
+name = "sentinel-watch"
 version = "0.3.0"
 description = "tiny folder watchdog that spots ransomware-ish behavior"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
+authors = [{ name = "HahaAhhDev", email = "theabsolutesmartest@gmail.com" }]
 keywords = ["security", "ransomware", "watchdog", "integrity", "monitoring"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: System Administrators",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Security",
+  "Topic :: System :: Filesystems",
+  "Topic :: System :: Monitoring",
+]
 dependencies = [
   "watchdog",
   "typer",
@@ -15,7 +30,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "mkdocs", "mkdocs-material"]
+dev = ["pytest", "mkdocs", "mkdocs-material", "build", "twine"]
 
 [project.scripts]
 sentinel = "sentinel.cli:app"
@@ -24,9 +39,17 @@ sentinel = "sentinel.cli:app"
 Homepage = "https://github.com/HahaAhhDev/sentinel"
 Documentation = "https://hahaahhdev.github.io/sentinel"
 Issues = "https://github.com/HahaAhhDev/sentinel/issues"
+Changelog = "https://github.com/HahaAhhDev/sentinel/blob/main/CHANGELOG.md"
 
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["sentinel*"]
+
+[tool.setuptools.package-data]
+sentinel = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

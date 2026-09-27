@@ -1,0 +1,7 @@
+# keep sdist handy
+include README.md LICENSE CHANGELOG.md CONTRIBUTING.md
+include config.example.yaml mkdocs.yml
+recursive-include docs *.md
+recursive-include examples *
+global-exclude __pycache__ *.pyc *.pyo
+global-exclude .sentinel demo_run demo_ci site dist build *.egg-info
