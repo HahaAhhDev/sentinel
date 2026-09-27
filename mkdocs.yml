@@ -1,0 +1,43 @@
+site_name: sentinel
+site_url: https://hahaahhdev.github.io/sentinel/
+site_description: tiny folder watchdog that spots ransomware-ish behavior
+repo_url: https://github.com/HahaAhhDev/sentinel
+repo_name: HahaAhhDev/sentinel
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - search.suggest
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - pymdownx.superfences
+  - tables
+
+nav:
+  - Home: index.md
+  - Quickstart: QUICKSTART.md
+  - Config: CONFIG.md
+  - Rules: RULES.md
+  - CI and Actions: ACTIONS.md
+  - CLI: CLI.md
+  - Web docs: WEB.md
+  - FAQ: FAQ.md
+  - Changelog: CHANGELOG.md

@@ -1,0 +1,32 @@
+# copy to sentinel.yaml and tweak
+# all of these have sane defaults
+
+path: "."
+burst: 25
+window: 10
+cooldown: 30
+entropy_line: 7.5
+webhook: ""
+notify: false
+kill: false
+
+# vault keeps clean copies for restores
+vault_max_mb: 5
+
+# risk lines for check
+risk_warn: 40
+risk_high: 70
+
+# local web view
+serve_port: 8000
+
+# mail, blank means off
+mail_to: ""
+mail_from: "sentinel@localhost"
+smtp_host: "localhost"
+smtp_port: 25
+
+# extra ignore globs on top of .sentinelignore
+ignore:
+  - "*.tmp"
+  - "*.log"

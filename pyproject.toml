@@ -1,0 +1,32 @@
+[project]
+name = "sentinel"
+version = "0.3.0"
+description = "tiny folder watchdog that spots ransomware-ish behavior"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["security", "ransomware", "watchdog", "integrity", "monitoring"]
+dependencies = [
+  "watchdog",
+  "typer",
+  "rich",
+  "pyyaml",
+  "psutil",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "mkdocs", "mkdocs-material"]
+
+[project.scripts]
+sentinel = "sentinel.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/HahaAhhDev/sentinel"
+Documentation = "https://hahaahhdev.github.io/sentinel"
+Issues = "https://github.com/HahaAhhDev/sentinel/issues"
+
+[build-system]
+requires = ["setuptools"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
