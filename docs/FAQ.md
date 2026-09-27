@@ -1,8 +1,8 @@
 # FAQ
 
-## Will this catch real ransomware?
+## Will this stop real ransomware?
 
-It catches the shape: fast mass writes plus unreadable files plus notes. It will not catch slow or deep stuff. Think smoke alarm, not firewall.
+It blocks the noisy kind: fast mass writes, canary trips, note drops. On auto it kills the writer and jails the binary. On paranoid it freezes the rest too. Kernel rootkits and firmware tricks are out of scope for userland Python. Use Secure Boot, updates, real backups, and an EDR next to it on high value boxes.
 
 ## Does it phone home?
 
@@ -38,7 +38,11 @@ Yes for small text and code. `protect` fills vault on init. `protect --restore-c
 
 ## Windows?
 
-Watch works via watchdog. Popup tries notify-send, osascript, termux-notification. PRs welcome for native toast.
+Yes, same commands. Popups use a plain box, richer toasts with `pip install plyer`. Always on via `sentinel win-task --create` which makes a logon scheduled task. Full notes in Windows page.
+
+## What does auto do that warn does not?
+
+warn only logs, snaps, alerts. auto also kills top writers and jails binaries by sha. paranoid also suspends the rest. Pick with `--response` or yaml `response:`.
 
 ## Where is state?
 
@@ -46,7 +50,8 @@ All in `<root>/.sentinel/`:
 
 - `baseline.db`
 - `vault/` clean copies
-- `canary.txt`
+- `binquar/` jailed binaries plus sha index
+- `canary.txt` plus five decoy canaries in root
 - `sentinel.log`
 - `events.jsonl`
 - `quarantine/<ts>/`

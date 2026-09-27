@@ -38,6 +38,8 @@ nav:
   - Rules: RULES.md
   - CI and Actions: ACTIONS.md
   - CLI: CLI.md
+  - Protection: PROTECTION.md
+  - Windows: WINDOWS.md
   - Web docs: WEB.md
   - FAQ: FAQ.md
   - Changelog: CHANGELOG.md

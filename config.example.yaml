@@ -6,6 +6,7 @@ burst: 25
 window: 10
 cooldown: 30
 entropy_line: 7.5
+response: warn
 webhook: ""
 notify: false
 kill: false

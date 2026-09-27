@@ -2,21 +2,21 @@
 
 ![python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
-![version](https://img.shields.io/badge/version-0.3.0-orange)
+![version](https://img.shields.io/badge/version-0.4.0-orange)
 ![docs](https://img.shields.io/badge/docs-github%20pages-blue)
 ![ci](https://github.com/HahaAhhDev/sentinel/actions/workflows/ci.yml/badge.svg)
 
-Tiny folder watchdog that spots ransomware-like behavior. Baseline it, watch it, get told before it is too late.
+Tiny folder watchdog that spots ransomware-like behavior and blocks it. Baseline it, watch it, let it kill the bad proc.
 
 Docs site: https://hahaahhdev.github.io/sentinel/
 
 ```
 pip install sentinel-watch
 sentinel init ~/Documents
-sentinel watch ~/Documents
+sentinel watch ~/Documents --response auto
 ```
 
-That is the pitch. No server. No signup. Files stay local.
+That is the pitch. No server. No signup. Files stay local. Works on Linux and Windows.
 
 ---
 
@@ -83,8 +83,13 @@ Full walk is in [docs](https://hahaahhdev.github.io/sentinel/) under Quickstart.
 | `scan` | Score files, json or sarif |
 | `why FILE` | Explain one file |
 | `check` | Verify plus scan plus risk, for CI |
-| `watch` | Live loop, canary, notes, storms |
+| `watch` | Live loop. `--response warn/auto/paranoid` |
 | `learn` | Watch quiet, suggest burst |
+| `harden` | Canaries plus autostart plus net plus drift |
+| `netscan` | Live odd connections |
+| `persist` | Autostart entries, scored |
+| `quar` | Jailed binaries, resume held pids |
+| `win-task` | Windows logon task, create or remove |
 | `protect` | Fill vault or restore clean |
 | `events`, `timeline` | Last hits |
 | `snaps`, `restore` | Quarantine packs |
@@ -126,6 +131,7 @@ burst: 25
 window: 10
 cooldown: 30
 entropy_line: 7.5
+response: warn
 vault_max_mb: 5
 risk_warn: 40
 risk_high: 70
@@ -140,17 +146,19 @@ Ignores merge from built ins, `.sentinelignore`, and yaml `ignore:`. Full list i
 
 Hits go to terminal, `.sentinel/sentinel.log`, `.sentinel/events.jsonl`. Optional webhook, mail via local smtp, desktop popup.
 
-Two safety nets:
+Two safety nets plus one jail:
 
 - quarantine in `.sentinel/quarantine/<ts>/`, post hit copies for forensics
 - vault in `.sentinel/vault/`, pre hit clean copies for restores
+- binquar in `.sentinel/binquar/`, jailed attacker binaries with sha
 
 ```bash
 sentinel snaps .
+sentinel quar .
 sentinel protect . --restore-clean all
 ```
 
-Most tools only do the first. Vault is why restores actually work.
+Most tools only do the first. Vault is why restores actually work, binquar is why repeat offenders get flagged by hash.
 
 ## CI and web
 

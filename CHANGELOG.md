@@ -1,6 +1,17 @@
 # Changelog
 
-## 0.3.0
+## 0.4.0
+
+- add response tiers warn, auto, paranoid to watch
+- auto kills writer and jails binary, paranoid freezes rest
+- add binquar with sha index plus quar list and resume
+- add harden one pass: canaries, autostart, net, drift
+- add persist scan for Run keys, Startup, cron, autostart
+- add netscan for odd ports and odd bins
+- add five decoy canaries on init and watch
+- add win-task logon task plus windows guide
+- popups on windows via box, toast with plyer
+- human pass over new code and docs
 
 - add `check` with risk clean/warn/high plus json and sarif
 - add `why` to explain one file score

@@ -129,8 +129,38 @@ def send_mail(cfg, title, detail):
         return False
 
 
+def win_box(title, detail):
+    # plain popup, stdlib only
+    try:
+        import ctypes
+
+        MB_OK = 0x0
+        MB_ICONWARNING = 0x30
+        ctypes.windll.user32.MessageBoxW(0, detail[:500] or title, f"sentinel: {title}", MB_OK | MB_ICONWARNING)
+        return True
+    except Exception:
+        return False
+
+
+def win_toast(title, detail):
+    # rich toast if plyer around
+    try:
+        from plyer import notification
+
+        notification.notify(title=f"sentinel: {title}", message=(detail or "")[:250], timeout=10)
+        return True
+    except Exception:
+        return False
+
+
 def desktop_note(title, detail):
-    # try linux then mac
+    # win first, then linux, mac
+    import sys
+
+    if sys.platform == "win32":
+        if win_toast(title, detail):
+            return True
+        return win_box(title, detail)
     try:
         if shutil.which("notify-send"):
             subprocess.run(["notify-send", title, detail], timeout=3)

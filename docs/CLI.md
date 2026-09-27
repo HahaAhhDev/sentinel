@@ -84,11 +84,12 @@ sentinel watch .
 sentinel watch . --burst 25 --window 10 --cooldown 30
 sentinel watch . --webhook "$URL" --notify --kill
 sentinel watch . --daemon
+sentinel watch . --response auto
 ```
 
 Live loop. Order per event: canary, note, rename or delete storm, burst, single scrambled file. Cooldown keeps it to 1 or 2 alerts per hit.
 
-`--daemon` forks to bg and writes `.sentinel/watch.pid`.
+`--response` picks warn, auto, or paranoid. auto kills the writer and jails its binary. paranoid also freezes the rest. `--daemon` forks to bg and writes `.sentinel/watch.pid`. On Windows use `win-task` to run at logon.
 
 ## learn
 
@@ -107,6 +108,28 @@ sentinel protect . --restore-clean a.txt,b.txt
 ```
 
 Fill vault, or bring clean copies back. This beats plain quarantine because it restores pre hit text, not post hit junk.
+
+## harden, netscan, persist
+
+```bash
+sentinel harden .
+sentinel harden . --json
+sentinel netscan
+sentinel persist
+```
+
+`harden` does one pass: canaries, autostart scan, odd connections, drift, tier. `netscan` shows live odd connections. `persist` lists autostart entries scored for bad signs. Full story in Protection and Windows pages.
+
+## quar and win-task
+
+```bash
+sentinel quar .
+sentinel quar . --resume-pid 1234
+sentinel win-task "C:\Data" --create
+sentinel win-task "C:\Data" --remove
+```
+
+`quar` lists jailed binaries with sha. `--resume-pid` unfreezes a held proc. `win-task` prints or makes the logon task on Windows.
 
 ## events and timeline
 

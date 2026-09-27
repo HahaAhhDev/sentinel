@@ -9,7 +9,7 @@ from rich import print as rprint
 from rich.progress import track
 from rich.table import Table
 
-from . import baseline, detect, proc, report, respond, vault
+from . import baseline, canary, detect, guard, net, persist, policy, proc, quar, report, respond, vault
 from . import config as cfgmod
 from .watcher import watch_loop
 
@@ -44,11 +44,12 @@ def init(
     c = _cfg(config)
     root = os.path.abspath(path)
     pats = _pats(root, c)
+    made = canary.deploy(root)
     files = baseline.list_files(root, pats)
     rprint(f"hashing {len(files)} files in {root}")
     n = baseline.build(root, pats=pats, jobs=jobs)
     v = vault.fill(root, pats, vault_mb)
-    rprint(f"[green]saved {n} files, vaulted {v}[/green]")
+    rprint(f"[green]saved {n} files, vaulted {v}, {made} canaries[/green]")
 
 
 @app.command()
@@ -262,26 +263,33 @@ def watch(
     webhook: str = typer.Option("", help="slack/discord url"),
     kill: bool = typer.Option(False, help="kill top writer"),
     notify: bool = typer.Option(False, help="popup"),
+    response: str = typer.Option("", help="warn, auto, or paranoid"),
     daemon: bool = typer.Option(False, help="run in bg"),
     pidfile: str = typer.Option("", help="where to store pid"),
 ):
-    # live loop
+    # live loop, blocks real hits per tier
     c = _cfg(config, burst=burst, window=window, webhook=webhook)
     burst = int(c["burst"])
     window = int(c["window"])
     cooldown = int(c.get("cooldown", cooldown))
-    webhook = c.get("webhook", "")
     line = float(c.get("entropy_line", 7.5))
     if kill or c.get("kill"):
-        kill = True
+        # old flag means auto at least
+        c["response"] = "auto"
+    if response:
+        c["response"] = policy.norm(response)
     if notify or c.get("notify"):
         notify = True
+        c["notify"] = True
 
     root = os.path.abspath(path)
     pats = _pats(root, c)
 
     if daemon:
         # fork off, write pid
+        if sys.platform == "win32":
+            rprint("[red]daemon fork is unix only, use win-task instead[/red]")
+            raise typer.Exit(1)
         pf = pidfile or os.path.join(root, ".sentinel", "watch.pid")
         os.makedirs(os.path.dirname(pf), exist_ok=True)
         pid = os.fork() if hasattr(os, "fork") else None
@@ -291,18 +299,20 @@ def watch(
             rprint(f"[green]bg pid {pid} in {pf}[/green]")
             return
 
-    canary = os.path.join(root, ".sentinel", "canary.txt")
-    os.makedirs(os.path.dirname(canary), exist_ok=True)
-    if not os.path.exists(canary):
-        with open(canary, "w") as f:
+    single = os.path.join(root, ".sentinel", "canary.txt")
+    os.makedirs(os.path.dirname(single), exist_ok=True)
+    if not os.path.exists(single):
+        with open(single, "w") as f:
             f.write("leave me alone")
+    canary.deploy(root)
 
     b = detect.Burst(max_events=burst, window=window)
     mix = detect.Mix(max_events=burst, window=window)
     recent: list[str] = []
     cool_until = 0.0
+    tier = policy.norm(c.get("response", "warn"))
 
-    rprint(f"[green]watching {root} (burst {burst}/{window}s)[/green]")
+    rprint(f"[green]watching {root} (burst {burst}/{window}s, {tier})[/green]")
     rprint("ctrl-c to stop")
 
     def on_event(kind, full):
@@ -314,10 +324,9 @@ def watch(
         if len(recent) > 100:
             recent.pop(0)
 
-        # canary always wins
-        if os.path.abspath(full) == os.path.abspath(canary):
-            respond.alert(root, "canary touched", f"{kind} {full}", [full], webhook, notify, c)
-            maybe_kill(root, kill, webhook, notify, c)
+        # canary always wins, blocks even on warn tier lore
+        if canary.is_canary(root, full):
+            guard.handle(root, "canary touched", f"{kind} {full}", [full], c)
             b.reset()
             return
 
@@ -326,15 +335,14 @@ def watch(
             if detect.is_note_name(full) or detect.looks_like_note(full):
                 if now > cool_until:
                     cool_until = now + cooldown
-                    respond.alert(root, "possible ransom note", full, [full], webhook, notify, c)
+                    guard.handle(root, "possible ransom note", full, [full], c)
                 return
 
         # rename or delete flood
         st = mix.storm()
         if st and now > cool_until:
             cool_until = now + cooldown
-            respond.alert(root, f"{st} storm", f"{kind} flood, last {os.path.basename(full)}", list(recent), webhook, notify, c)
-            maybe_kill(root, kill, webhook, notify, c)
+            guard.handle(root, f"{st} storm", f"{kind} flood, last {os.path.basename(full)}", list(recent), c)
             b.reset()
             mix.reset()
             recent.clear()
@@ -344,8 +352,7 @@ def watch(
         if b.tripped() and now > cool_until:
             cool_until = now + cooldown
             detail = f"{n} events in {window}s, last: {os.path.basename(full)}"
-            respond.alert(root, "burst of file changes", detail, list(recent), webhook, notify, c)
-            maybe_kill(root, kill, webhook, notify, c)
+            guard.handle(root, "burst of file changes", detail, list(recent), c)
             b.reset()
             mix.reset()
             recent.clear()
@@ -356,23 +363,173 @@ def watch(
             bad, why = detect.looks_encrypted(full, line)
             if bad and now > cool_until:
                 cool_until = now + cooldown
-                respond.alert(root, "file looks encrypted", f"{full} ({why})", [full], webhook, notify, c)
+                guard.handle(root, "file looks encrypted", f"{full} ({why})", [full], c)
 
     watch_loop(root, on_event, pats=pats)
 
 
-def maybe_kill(root, do_kill, webhook, notify, cfg):
-    # kill top holder if asked
-    if not do_kill:
+@app.command()
+def harden(
+    path: str = typer.Argument(".", help="folder to guard"),
+    config: str = typer.Option(""),
+    out_json: bool = typer.Option(False, "--json", help="json out"),
+):
+    # one pass: canaries, persist, net, baseline state
+    import sys as _sys
+
+    c = _cfg(config)
+    root = os.path.abspath(path)
+    made = canary.deploy(root)
+    entries = persist.scan()
+    flagged = []
+    for e in entries:
+        pts, why = persist.sus(e)
+        if pts >= 30:
+            flagged.append({**e, "score": pts, "why": why})
+    nets = net.scan()
+    try:
+        v = baseline.verify(root, pats=_pats(root, c))
+        drift = len(v["changed"]) + len(v["deleted"])
+    except FileNotFoundError:
+        drift = -1
+    res = {
+        "os": _sys.platform,
+        "canaries": made,
+        "persist_total": len(entries),
+        "persist_flagged": flagged,
+        "net_hits": nets,
+        "drift": drift,
+        "tier": policy.norm(c.get("response", "warn")),
+    }
+    if out_json:
+        print(json.dumps(res, indent=2))
         return
-    tops = proc.top_writer(root, 3)
-    if not tops:
+    t = Table(title=f"harden {root} ({res['os']})")
+    t.add_column("check")
+    t.add_column("result")
+    t.add_row("canaries laid", str(made))
+    t.add_row("autostart entries", f"{len(entries)} ({len(flagged)} sus)")
+    for f in flagged[:5]:
+        t.add_row("  sus", f"{f['name']} [{', '.join(f['why'])}]")
+    t.add_row("odd connections", str(len(nets)))
+    for n in nets[:5]:
+        t.add_row("  conn", f"{n['name']} {n['ip']}:{n['port']} ({', '.join(n['why'])})")
+    t.add_row("baseline drift", "no baseline" if drift < 0 else str(drift))
+    t.add_row("response tier", res["tier"] + f" ({', '.join(policy.what(res['tier']))})")
+    rprint(t)
+    if flagged or nets or drift and drift > 0:
+        rprint("[yellow]look above, clean those first[/yellow]")
+    else:
+        rprint("[green]looks quiet[/green]")
+
+
+@app.command()
+def netscan(out_json: bool = typer.Option(False, "--json", help="json out")):
+    # live odd connections
+    rows = net.scan()
+    if out_json:
+        print(json.dumps(rows, indent=2))
         return
-    pid = tops[0]["pid"]
-    name = tops[0]["name"]
-    ok = proc.kill(pid)
-    msg = f"killed {name} ({pid})" if ok else f"tried to kill {name} ({pid})"
-    respond.alert(root, "auto kill", msg, None, webhook, notify, cfg)
+    if not rows:
+        rprint("[green]no odd connections[/green]")
+        return
+    t = Table(title="odd connections")
+    t.add_column("pid")
+    t.add_column("proc")
+    t.add_column("remote")
+    t.add_column("score")
+    t.add_column("why")
+    for r in rows:
+        t.add_row(str(r["pid"]), r["name"], f"{r['ip']}:{r['port']}", str(r["score"]), ", ".join(r["why"]))
+    rprint(t)
+
+
+@app.command(name="persist")
+def persist_cmd(out_json: bool = typer.Option(False, "--json", help="json out")):
+    # autostart entries on this box
+    rows = persist.scan()
+    out = []
+    for e in rows:
+        pts, why = persist.sus(e)
+        out.append({**e, "score": pts, "why": why})
+    out.sort(key=lambda r: r["score"], reverse=True)
+    if out_json:
+        print(json.dumps(out, indent=2))
+        return
+    if not out:
+        rprint("[green]no autostart entries found[/green]")
+        return
+    t = Table(title="autostart")
+    t.add_column("score")
+    t.add_column("where")
+    t.add_column("name")
+    t.add_column("cmd")
+    for e in out:
+        cmd = e["cmd"]
+        if len(cmd) > 60:
+            cmd = cmd[:60] + "..."
+        t.add_row(str(e["score"]), e["where"], e["name"], cmd)
+    rprint(t)
+
+
+@app.command(name="quar")
+def quar_cmd(
+    path: str = typer.Argument(".", help="folder"),
+    resume_pid: int = typer.Option(0, help="resume a held pid"),
+):
+    # jailed binaries, plus unfreeze
+    root = os.path.abspath(path)
+    if resume_pid:
+        ok = proc.resume(resume_pid)
+        rprint("[green]resumed[/green]" if ok else "[red]no such pid[/red]")
+        return
+    rows = quar.list_all(root)
+    if not rows:
+        rprint("quarantine empty, nothing jailed yet")
+        return
+    t = Table(title=f"jailed {root}")
+    t.add_column("time")
+    t.add_column("sha")
+    t.add_column("from")
+    t.add_column("why")
+    for r in rows:
+        t.add_row(r.get("ts", ""), (r.get("sha", "")[:12]), r.get("from", "")[:50], r.get("why", "")[:40])
+    rprint(t)
+
+
+@app.command()
+def win_task(
+    path: str = typer.Argument(".", help="folder to watch"),
+    create: bool = typer.Option(False, help="make scheduled task"),
+    remove: bool = typer.Option(False, help="drop scheduled task"),
+    task: str = typer.Option("", help="task name"),
+    config: str = typer.Option("", help="yaml to use"),
+):
+    # windows always on watch via task scheduler
+    import subprocess as _sp
+    import sys as _sys
+
+    c = _cfg(config)
+    name = task or c.get("win_task", "SentinelWatch")
+    root = os.path.abspath(path)
+    if remove:
+        if _sys.platform != "win32":
+            rprint("remove runs on windows only")
+            raise typer.Exit(1)
+        _sp.run(["schtasks", "/Delete", "/TN", name, "/F"])
+        rprint(f"[green]dropped {name}[/green]")
+        return
+    cmd = f'schtasks /Create /TN "{name}" /TR "sentinel watch \\"{root}\\" --response auto" /SC ONLOGON /RL HIGHEST /F'
+    if create:
+        if _sys.platform != "win32":
+            rprint("create runs on windows only, command would be:")
+            rprint(cmd)
+            raise typer.Exit(1)
+        _sp.run(cmd, shell=True)
+        rprint(f"[green]watch starts at logon ({name})[/green]")
+        return
+    rprint("run with --create on your windows box:")
+    rprint(cmd)
 
 
 @app.command()
@@ -563,6 +720,14 @@ def doctor(path: str = typer.Argument(".", help="folder")):
         rprint(f"[green]baseline {meta.get('count','?')} files[/green]")
     else:
         rprint("[yellow]no baseline yet[/yellow]")
+    # os and tier
+    c = cfgmod.load()
+    rprint(f"os {sys.platform}, tier {policy.norm(c.get('response', 'warn'))}")
+    try:
+        n_p = len(persist.scan())
+        rprint(f"autostart entries: {n_p} (see persist cmd)")
+    except Exception:
+        pass
     # python
     rprint(f"python {sys.version.split()[0]}")
     if not ok:

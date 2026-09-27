@@ -7,6 +7,8 @@ Start here if new:
 - [Quickstart](QUICKSTART.md) - five minutes to first alert
 - [Config](CONFIG.md) - yaml and ignores
 - [Rules](RULES.md) - how burst and entropy work
+- [Protection](PROTECTION.md) - tiers that kill and jail
+- [Windows](WINDOWS.md) - install and always on
 - [CLI](CLI.md) - every command with examples
 - [CI and Actions](ACTIONS.md) - fail builds, sarif, artifacts
 - [Web docs](WEB.md) - local serve plus GitHub Pages

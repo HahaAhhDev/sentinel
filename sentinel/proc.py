@@ -45,3 +45,35 @@ def describe(pid):
         return f"{p.name()} ({pid}) cwd={p.cwd()}"
     except Exception:
         return str(pid)
+
+
+def exe_of(pid):
+    # path to the binary or empty
+    if psutil is None or not pid:
+        return ""
+    try:
+        return psutil.Process(pid).exe() or ""
+    except Exception:
+        return ""
+
+
+def suspend(pid):
+    # freeze it, works both os
+    if psutil is None or not pid:
+        return False
+    try:
+        psutil.Process(pid).suspend()
+        return True
+    except Exception:
+        return False
+
+
+def resume(pid):
+    # unfreeze it
+    if psutil is None or not pid:
+        return False
+    try:
+        psutil.Process(pid).resume()
+        return True
+    except Exception:
+        return False

@@ -28,6 +28,10 @@ DEFAULTS = {
     "mail_from": "sentinel@localhost",
     "smtp_host": "localhost",
     "smtp_port": 25,
+    # block tiers: warn, auto, paranoid
+    "response": "warn",
+    "canaries": 5,
+    "win_task": "SentinelWatch",
 }
 
 
