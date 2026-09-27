@@ -60,6 +60,18 @@ Score in `score_file`:
 
 Cap 100. `scan` prints 40+. `why FILE` explains one file.
 
+## String packs
+
+`sentinel/packs/` holds yaml rules: name, strings, need count, points. `notes.yaml` for ransom words, `rats.yaml` for remote access strings. `scan` and `why` add pack points on top of ext and entropy. Add your own pack file and it loads. No new deps.
+
+## Hash intel
+
+`sentinel intel --add <sha>` blocks a hash. `--import-file` loads a feed dump. `scan` hashes each file once and flags known bad at 100. Feeds age fast, so refresh on your own schedule and keep the file local.
+
+## Entropy delta
+
+Baseline stores entropy per file. `verify` and `check` flag jumps over 2.0 as `jumped`. Slow crypto that never trips burst still shows here. Strict per folder via `paths:` lines.
+
 ## Risk
 
 `risk()` rolls it up for `check`:

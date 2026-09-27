@@ -95,7 +95,7 @@ def looks_encrypted(path, line=ENTROPY_LINE):
     return False, ""
 
 
-def score_file(path, line=ENTROPY_LINE):
+def score_file(path, line=ENTROPY_LINE, packs=None):
     # 0-100 plus why list
     pts = 0
     why = []
@@ -113,12 +113,21 @@ def score_file(path, line=ENTROPY_LINE):
     if bad and "high entropy" in msg:
         pts += 40
         why.append(msg)
+    if packs:
+        from . import rules as _rules
+
+        rpts, rwhy = _rules.check_file(path, packs)
+        if rpts:
+            pts += rpts
+            why += rwhy
     return min(pts, 100), why
 
 
 def explain(path, line=ENTROPY_LINE):
     # plain words for one file
-    s, why = score_file(path, line)
+    from . import rules as _rules
+
+    s, why = score_file(path, line, _rules.load_all())
     try:
         size = os.path.getsize(path)
     except OSError:

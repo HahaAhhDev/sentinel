@@ -1,6 +1,19 @@
 # Changelog
 
-## 0.4.0
+## 0.5.0
+
+- add string rule packs plus rat pack, custom packs load free
+- add local sha blocklist via intel add and import
+- add entropy jump flags in verify and check
+- add profiles home, server, uploads, paranoid
+- add config lint, per path entropy lines, allowlist
+- guard spares allowlisted and signed binaries
+- add vault history with keep count, rollback restores pre hit
+- add baseline seal with tamper warn
+- add bench, policy, prune, incident, service, intel commands
+- add systemd unit, launchd plist, windows task docs
+- watch counts health, doctor shows it
+- ci runs ubuntu, windows, macos
 
 - add response tiers warn, auto, paranoid to watch
 - auto kills writer and jails binary, paranoid freezes rest

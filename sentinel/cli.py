@@ -9,7 +9,7 @@ from rich import print as rprint
 from rich.progress import track
 from rich.table import Table
 
-from . import baseline, canary, detect, guard, net, persist, policy, proc, quar, report, respond, vault
+from . import baseline, canary, detect, guard, health, net, persist, policy, proc, quar, report, respond, vault
 from . import config as cfgmod
 from .watcher import watch_loop
 
@@ -81,9 +81,14 @@ def status(path: str = typer.Argument(".", help="folder"), config: str = typer.O
     for k in ["root", "count", "created", "updated"]:
         if k in meta:
             t.add_row(k, str(meta[k]))
-    # vault size
+    # vault size, skip history
     vd = os.path.join(root, ".sentinel", "vault")
-    n_v = sum(len(f) for _, _, f in os.walk(vd)) if os.path.isdir(vd) else 0
+    n_v = 0
+    if os.path.isdir(vd):
+        for dp, _, f in os.walk(vd):
+            if ".history" in dp:
+                continue
+            n_v += len(f)
     t.add_row("vault files", str(n_v))
     rprint(t)
 
@@ -105,6 +110,8 @@ def verify(
     except FileNotFoundError:
         rprint("[red]no baseline, run init first[/red]")
         raise typer.Exit(1)
+    if not r.get("seal_ok", True):
+        rprint("[red]seal broken, baseline db may be edited[/red]")
     if out_json:
         print(json.dumps(r, indent=2))
     elif not r["changed"] and not r["new"] and not r["deleted"]:
@@ -171,7 +178,7 @@ def scan(
         line = float(c["entropy_line"])
     root = os.path.abspath(path)
     pats = _pats(root, c)
-    rows = report.scan_files(root, pats, line, top)
+    rows = report.scan_files(root, pats, line, top, cfg=c)
     if sarif:
         print(json.dumps(respond.sarif(rows, root), indent=2))
         return
@@ -230,8 +237,8 @@ def check(
     try:
         v = baseline.verify(root, pats=pats)
     except FileNotFoundError:
-        v = {"changed": [], "new": [], "deleted": [], "meta": {}}
-    rows = report.scan_files(root, pats, line)
+        v = {"changed": [], "new": [], "deleted": [], "jumped": [], "seal_ok": True, "meta": {}}
+    rows = report.scan_files(root, pats, line, cfg=c)
     rk = detect.risk(v, rows)
     if sarif:
         print(json.dumps(respond.sarif(rows, root), indent=2))
@@ -243,6 +250,10 @@ def check(
         rprint(f"[{col}]risk {rk['level']} {rk['score']}[/{col}] " + (", ".join(rk["bits"]) or "all quiet"))
         if v["changed"] or v["deleted"]:
             rprint(f"{len(v['changed'])} changed, {len(v['deleted'])} deleted, {len(v['new'])} new")
+        if v.get("jumped"):
+            rprint(f"[yellow]{len(v['jumped'])} entropy jumps (crypto smell)[/yellow]")
+        if not v.get("seal_ok", True):
+            rprint("[red]baseline seal broken, db may be edited[/red]")
         if rows:
             rprint(f"{len(rows)} scan hits, top {rows[0]['score']}")
     if html:
@@ -365,7 +376,7 @@ def watch(
                 cool_until = now + cooldown
                 guard.handle(root, "file looks encrypted", f"{full} ({why})", [full], c)
 
-    watch_loop(root, on_event, pats=pats)
+    watch_loop(root, health.wrap(root, on_event), pats=pats)
 
 
 @app.command()
@@ -533,6 +544,153 @@ def win_task(
 
 
 @app.command()
+def bench(
+    path: str = typer.Argument(".", help="folder"),
+    config: str = typer.Option(""),
+):
+    # how fast do we hash and scan
+    import time as _t
+
+    c = _cfg(config)
+    root = os.path.abspath(path)
+    pats = _pats(root, c)
+    files = baseline.list_files(root, pats)
+    t0 = _t.time()
+    n = 0
+    for f in files[:500]:
+        try:
+            baseline.file_hash(f)
+            n += 1
+        except OSError:
+            pass
+    dt = max(_t.time() - t0, 0.01)
+    t = Table(title=f"bench {root}")
+    t.add_column("k")
+    t.add_column("v")
+    t.add_row("files listed", str(len(files)))
+    t.add_row("hashed", str(n))
+    t.add_row("hash rate", f"{n / dt:.0f}/s")
+    rprint(t)
+
+
+@app.command(name="policy")
+def policy_cmd(
+    path: str = typer.Argument(".", help="folder"),
+    config: str = typer.Option(""),
+    file: str = typer.Option("", help="explain one file"),
+):
+    # which rules would fire and why
+    c = _cfg(config)
+    root = os.path.abspath(path)
+    tier = policy.norm(c.get("response", "warn"))
+    t = Table(title=f"policy {root}")
+    t.add_column("k")
+    t.add_column("v")
+    t.add_row("tier", f"{tier} ({', '.join(policy.what(tier))})")
+    t.add_row("burst", f"{c.get('burst')}/{c.get('window')}s")
+    t.add_row("entropy line", str(c.get("entropy_line")))
+    t.add_row("profile", str(c.get("profile", "")) or "none")
+    gripes = c.get("_gripes", [])
+    t.add_row("config", "ok" if not gripes else "; ".join(gripes))
+    rprint(t)
+    if file:
+        full = file if os.path.isabs(file) else os.path.join(root, file)
+        e = detect.explain(full, float(c.get("entropy_line", 7.5)))
+        rprint(f"score {e['score']} {e['level']} ({', '.join(e['why']) or 'nothing odd'})")
+
+
+@app.command()
+def prune(
+    path: str = typer.Argument(".", help="folder"),
+    config: str = typer.Option(""),
+    max_mb: int = typer.Option(500, help="quarantine cap"),
+):
+    # trim snaps and logs
+    c = _cfg(config)
+    cap = max_mb or int(c.get("quar_max_mb", 500))
+    did = respond.prune(os.path.abspath(path), cap)
+    if not did:
+        rprint("nothing to trim")
+    for d in did:
+        rprint(d)
+
+
+@app.command()
+def incident(
+    path: str = typer.Argument(".", help="folder"),
+    out: str = typer.Option("", help="zip dest"),
+):
+    # bundle for the grown ups
+    dest = respond.bundle(os.path.abspath(path), out)
+    rprint(f"[green]wrote {dest}[/green]")
+
+
+@app.command()
+def service(
+    path: str = typer.Argument(".", help="folder to watch"),
+    install: bool = typer.Option(False, help="set up always on"),
+    remove: bool = typer.Option(False, help="tear down"),
+):
+    # systemd, launchd, or task scheduler
+    import subprocess as _sp
+    import sys as _sys
+
+    root = os.path.abspath(path)
+    plat = _sys.platform
+    if remove:
+        if plat == "win32":
+            _sp.run(["schtasks", "/Delete", "/TN", "SentinelWatch", "/F"])
+        elif plat == "darwin":
+            _sp.run(["launchctl", "unload", os.path.expanduser("~/Library/LaunchAgents/com.sentinel.plist")])
+        else:
+            _sp.run(["systemctl", "--user", "disable", "--now", "sentinel.service"])
+        rprint("[green]service removed[/green]")
+        return
+    if install:
+        if plat == "win32":
+            rprint('run: sentinel win-task "<path>" --create')
+            return
+        if plat == "darwin":
+            rprint("copy examples/com.sentinel.plist to ~/Library/LaunchAgents/, fix the path, then:")
+            rprint("launchctl load ~/Library/LaunchAgents/com.sentinel.plist")
+            return
+        rprint("copy examples/sentinel.service to ~/.config/systemd/user/, then:")
+        rprint("systemctl --user enable --now sentinel.service")
+        return
+    rprint(f"{plat}: use --install to print steps")
+
+
+@app.command()
+def intel(
+    path: str = typer.Argument(".", help="folder"),
+    add: str = typer.Option("", help="sha to block"),
+    import_file: str = typer.Option("", help="file of shas"),
+):
+    # local sha blocklist
+    from . import intel as _intel
+
+    root = os.path.abspath(path)
+    shas = []
+    if add:
+        shas.append(add)
+    if import_file:
+        with open(import_file) as f:
+            shas += [l.strip() for l in f if l.strip() and not l.startswith("#")]
+    if shas:
+        n = _intel.save(root, shas)
+        rprint(f"[green]blocklist now {n} shas[/green]")
+        return
+    rows = sorted(_intel.load(root))
+    if not rows:
+        rprint("blocklist empty, add with --add")
+        return
+    for s in rows[:20]:
+        rprint(s)
+    if len(rows) > 20:
+        rprint(f"... {len(rows) - 20} more")
+
+
+@app.command()
 def events(
     path: str = typer.Argument(".", help="folder"),
     n: int = typer.Option(20, help="how many"),
@@ -681,12 +839,24 @@ def learn(path: str = typer.Argument(".", help="folder"), secs: int = typer.Opti
 
 
 @app.command()
-def config_init(dest: str = typer.Argument("sentinel.yaml", help="where to write")):
+def config_init(
+    dest: str = typer.Argument("sentinel.yaml", help="where to write"),
+    profile: str = typer.Option("", help="home, server, uploads, paranoid"),
+):
     # starter yaml
     if os.path.exists(dest):
         rprint(f"[red]{dest} exists, remove it first[/red]")
         raise typer.Exit(1)
     cfgmod.write_example(dest)
+    if profile and profile.lower() in cfgmod.PROFILES:
+        # stamp profile on top
+        import yaml as _y
+
+        with open(dest) as f:
+            data = _y.safe_load(f) or {}
+        data["profile"] = profile.lower()
+        with open(dest, "w") as f:
+            _y.safe_dump(data, f, sort_keys=False)
     rprint(f"[green]wrote {dest}, tweak and go[/green]")
 
 
@@ -713,6 +883,13 @@ def doctor(path: str = typer.Argument(".", help="folder")):
     # config
     c = cfgmod.load()
     rprint(f"config file: {c.get('_file') or 'none, using defaults'}")
+    for g in c.get("_gripes", []):
+        rprint(f"[yellow]config: {g}[/yellow]")
+    # watcher health
+    from . import health as _h
+
+    h = _h.load(root)
+    rprint(f"watcher events {h.get('events', 0)}, errors {h.get('errors', 0)}, hits {h.get('hits', 0)}")
     # baseline
     db = baseline.db_path_for(root)
     if os.path.isfile(db):

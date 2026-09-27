@@ -19,6 +19,30 @@ def db_path_for(root):
     return os.path.join(root, ".sentinel", "baseline.db")
 
 
+def seal_path_for(root):
+    return os.path.join(root, ".sentinel", "seal")
+
+
+def seal(root, db_path):
+    # stamp db hash so wipes show
+    try:
+        h = file_hash(db_path)
+        with open(seal_path_for(root), "w") as f:
+            f.write(h)
+    except OSError:
+        pass
+
+
+def seal_ok(root, db_path):
+    # true when db matches stamp
+    try:
+        with open(seal_path_for(root)) as f:
+            want = f.read().strip()
+        return file_hash(db_path) == want
+    except OSError:
+        return True
+
+
 def file_hash(path):
     # read in bits
     h = hashlib.sha256()
@@ -113,6 +137,7 @@ def build(root, db_path=None, pats=None, jobs=8):
     cur.execute("insert into meta values (?, ?)", ("count", str(len(rows))))
     con.commit()
     con.close()
+    seal(root, db_path)
     return len(rows)
 
 
@@ -157,6 +182,7 @@ def update(root, db_path=None, pats=None, jobs=8):
     cur.execute("insert or replace into meta values (?, ?)", ("updated", str(time.time())))
     con.commit()
     con.close()
+    seal(root, db_path)
     return len(rows)
 
 
@@ -216,7 +242,26 @@ def verify(root, db_path=None, pats=None):
             changed.append(rel)
 
     gone = [p for p in old if p not in seen]
-    return {"changed": sorted(changed), "new": sorted(new), "deleted": sorted(gone), "meta": meta}
+    # entropy jumps smell like crypto even under burst line
+    jumped = []
+    for rel in changed:
+        o = old.get(rel, {}).get("entropy", -1.0)
+        if o is None or o < 0:
+            continue
+        try:
+            now_e = file_entropy(os.path.join(root, rel))
+        except OSError:
+            continue
+        if now_e - o > 2.0:
+            jumped.append(rel)
+    return {
+        "changed": sorted(changed),
+        "new": sorted(new),
+        "deleted": sorted(gone),
+        "jumped": sorted(jumped),
+        "seal_ok": seal_ok(root, db_path),
+        "meta": meta,
+    }
 
 
 def diff_text(root, rel, max_lines=60):

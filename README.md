@@ -2,7 +2,7 @@
 
 ![python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
-![version](https://img.shields.io/badge/version-0.4.0-orange)
+![version](https://img.shields.io/badge/version-0.5.0-orange)
 ![docs](https://img.shields.io/badge/docs-github%20pages-blue)
 ![ci](https://github.com/HahaAhhDev/sentinel/actions/workflows/ci.yml/badge.svg)
 
@@ -90,6 +90,12 @@ Full walk is in [docs](https://hahaahhdev.github.io/sentinel/) under Quickstart.
 | `persist` | Autostart entries, scored |
 | `quar` | Jailed binaries, resume held pids |
 | `win-task` | Windows logon task, create or remove |
+| `bench` | Hash rate on this box |
+| `policy` | Tier, rules, explain one file |
+| `prune` | Trim snaps and logs to caps |
+| `incident` | Zip case bundle |
+| `service` | Install steps per OS |
+| `intel` | Local sha blocklist |
 | `protect` | Fill vault or restore clean |
 | `events`, `timeline` | Last hits |
 | `snaps`, `restore` | Quarantine packs |
@@ -122,9 +128,10 @@ Work like normal for a minute, it tells you a sane burst.
 
 ```bash
 sentinel config-init
+sentinel config-init --profile server
 ```
 
-Writes `sentinel.yaml`. Sentinel finds `sentinel.yaml`, `.sentinel.yaml`, `.sentinel/config.yaml` by walking up. Flags beat file.
+Writes `sentinel.yaml`. Profiles: home, server, uploads, paranoid. Explicit keys beat the profile. Sentinel finds `sentinel.yaml`, `.sentinel.yaml`, `.sentinel/config.yaml` by walking up. Flags beat file. `doctor` lints the file and names bad keys.
 
 ```yaml
 burst: 25
@@ -132,17 +139,22 @@ window: 10
 cooldown: 30
 entropy_line: 7.5
 response: warn
+profile: home
 vault_max_mb: 5
+vault_keep: 3
+quar_max_mb: 500
 risk_warn: 40
 risk_high: 70
 webhook: ""
 notify: false
 kill: false
+allow: []
+paths: []
 ```
 
 Ignores merge from built ins, `.sentinelignore`, and yaml `ignore:`. Full list in [Config](https://hahaahhdev.github.io/sentinel/CONFIG/).
 
-## Alerts and restores
+## Alerts, restores, cases
 
 Hits go to terminal, `.sentinel/sentinel.log`, `.sentinel/events.jsonl`. Optional webhook, mail via local smtp, desktop popup.
 
@@ -159,6 +171,13 @@ sentinel protect . --restore-clean all
 ```
 
 Most tools only do the first. Vault is why restores actually work, binquar is why repeat offenders get flagged by hash.
+
+```bash
+sentinel incident . --out case.zip
+sentinel prune . --max-mb 500
+```
+
+Bundle zips logs, quar index, and verify state for someone else to read. Prune caps quarantine size and trims events so long hits do not fill the disk.
 
 ## CI and web
 
@@ -180,14 +199,23 @@ sentinel/
   cli.py       # commands
   baseline.py  # hash, sqlite, diff
   detect.py    # entropy, notes, risk
-  vault.py     # clean copies
+  vault.py     # clean copies plus history
   watcher.py   # live loop
-  respond.py   # logs, webhook, mail, sarif
+  respond.py   # logs, webhook, mail, sarif, prune, bundle
   report.py    # html
   serve.py     # local web
   learn.py     # auto tune
-  proc.py      # top writer, kill
-  config.py    # yaml
+  health.py    # watcher counters
+  policy.py    # tiers
+  quar.py      # binary jail
+  persist.py   # autostart scan
+  net.py       # conn scan
+  canary.py    # decoys
+  guard.py     # hits into blocks
+  rules.py     # string packs
+  intel.py     # sha blocklist
+  proc.py      # top writer, kill, signed check
+  config.py    # yaml, profiles, lint
 docs/          # pages source
 examples/
 tests/

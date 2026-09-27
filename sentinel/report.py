@@ -17,13 +17,38 @@ code{background:#f1f3f4;padding:2px 6px;border-radius:4px;word-break:break-all}
 """
 
 
-def scan_files(root, pats=None, line=7.5, top=200):
-    # walk and keep 40+
-    from .baseline import list_files
+def scan_files(root, pats=None, line=7.5, top=200, packs=None, intel_on=True, cfg=None):
+    # walk, hash once, score all
+    from .baseline import file_hash, list_files
+
+    if packs is None:
+        from . import rules as _rules
+
+        packs = _rules.load_all()
+    if intel_on:
+        from . import intel as _intel
+    else:
+        _intel = None
+    if cfg is not None:
+        from .config import line_for as _line_for
+    else:
+        _line_for = None
 
     out = []
     for full in list_files(root, pats):
-        score, why = detect.score_file(full, line)
+        rel = os.path.relpath(full, root)
+        per = _line_for(rel, cfg) if _line_for else line
+        try:
+            if os.path.getsize(full) > 5 * 1024 * 1024 or os.path.islink(full):
+                h = ""
+            else:
+                h = file_hash(full)
+        except OSError:
+            continue
+        if h and _intel and _intel.check(root, h):
+            out.append({"path": full, "score": 100, "why": [f"known bad sha {h[:12]}"]})
+            continue
+        score, why = detect.score_file(full, per, packs)
         if score >= 40:
             out.append({"path": full, "score": score, "why": why})
     out.sort(key=lambda x: x["score"], reverse=True)

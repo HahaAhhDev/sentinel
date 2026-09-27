@@ -1,0 +1,25 @@
+# remote access strings seen in cheap rats
+# scores only, never verdicts alone
+name: rats
+rules:
+  - name: rat strings
+    need: 2
+    points: 40
+    strings:
+      - reverse shell
+      - meterpreter
+      - cobalt strike
+      - powershell -enc
+      - powershell -e
+      - bitsadmin /transfer
+      - certutil -decode
+      - mshta http
+      - rundll32 javascript
+      - add-mppreference -exclusionpath
+  - name: keylog strings
+    need: 2
+    points: 35
+    strings:
+      - getasynckeystate
+      - setwindowshookexa
+      - keylog

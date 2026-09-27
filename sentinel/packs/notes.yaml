@@ -1,0 +1,22 @@
+# ransom note strings, add yours below
+name: notes
+rules:
+  - name: note words
+    need: 2
+    points: 45
+    strings:
+      - decrypt
+      - bitcoin
+      - monero
+      - recovery key
+      - onion
+      - tor browser
+      - send $
+  - name: note threat
+    need: 1
+    points: 30
+    strings:
+      - all your files have been encrypted
+      - your files are encrypted
+      - pay the ransom
+      - decryptor

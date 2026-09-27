@@ -57,6 +57,25 @@ def exe_of(pid):
         return ""
 
 
+def is_signed(exe):
+    # windows authenticode check, best effort
+    import subprocess
+    import sys
+
+    if sys.platform != "win32" or not exe:
+        return False
+    try:
+        r = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", f"(Get-AuthenticodeSignature '{exe}').Status"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        return "Valid" in r.stdout
+    except Exception:
+        return False
+
+
 def suspend(pid):
     # freeze it, works both os
     if psutil is None or not pid:

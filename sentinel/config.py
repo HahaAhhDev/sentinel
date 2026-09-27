@@ -32,7 +32,65 @@ DEFAULTS = {
     "response": "warn",
     "canaries": 5,
     "win_task": "SentinelWatch",
+    # procs we never kill
+    "allow": [],
+    # per path tweaks, first prefix match wins
+    "paths": [],
+    # keep N vault versions per file
+    "vault_keep": 3,
+    # quarantine cap in mb, 0 means no cap
+    "quar_max_mb": 500,
 }
+
+# one word starters
+PROFILES = {
+    "home": {"burst": 25, "window": 10, "entropy_line": 7.5, "response": "warn", "vault_max_mb": 5},
+    "server": {"burst": 50, "window": 10, "entropy_line": 7.5, "response": "auto", "vault_max_mb": 5},
+    "uploads": {"burst": 40, "window": 10, "entropy_line": 7.2, "response": "auto", "vault_max_mb": 10},
+    "paranoid": {"burst": 10, "window": 10, "entropy_line": 7.0, "response": "paranoid", "vault_max_mb": 10},
+}
+
+KNOWN = set(DEFAULTS) | {"profile"}
+
+
+def apply_profile(cfg):
+    # fold preset under explicit keys
+    name = str(cfg.get("profile", "")).lower()
+    if name in PROFILES:
+        base = dict(PROFILES[name])
+        base.update({k: v for k, v in cfg.items() if k in DEFAULTS and v != DEFAULTS.get(k)})
+        base.update({k: v for k, v in cfg.items() if k not in DEFAULTS})
+        return base
+    return cfg
+
+
+def check(cfg):
+    # lint it, return gripes
+    gripes = []
+    for k in cfg:
+        if k.startswith("_"):
+            continue
+        if k not in KNOWN:
+            gripes.append(f"unknown key {k}")
+    if str(cfg.get("response", "warn")).lower() not in ("warn", "auto", "paranoid"):
+        gripes.append("response must be warn, auto, or paranoid")
+    try:
+        if not 0 < float(cfg.get("entropy_line", 7.5)) < 8.5:
+            gripes.append("entropy_line looks off, 7.0 to 8.0 is sane")
+    except (TypeError, ValueError):
+        gripes.append("entropy_line must be a number")
+    return gripes
+
+
+def line_for(rel, cfg):
+    # per path entropy line
+    for rule in cfg.get("paths", []) or []:
+        if str(rel).startswith(str(rule.get("prefix", ""))):
+            try:
+                return float(rule.get("entropy_line", cfg.get("entropy_line", 7.5)))
+            except (TypeError, ValueError):
+                pass
+    return float(cfg.get("entropy_line", 7.5))
 
 
 def find(start="."):
@@ -58,7 +116,9 @@ def load(path=""):
             data = yaml.safe_load(f) or {}
         for k, v in data.items():
             out[k] = v
+    out = apply_profile(out)
     out["_file"] = p
+    out["_gripes"] = check(out)
     return out
 
 

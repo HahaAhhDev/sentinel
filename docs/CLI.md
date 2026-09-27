@@ -131,6 +131,21 @@ sentinel win-task "C:\Data" --remove
 
 `quar` lists jailed binaries with sha. `--resume-pid` unfreezes a held proc. `win-task` prints or makes the logon task on Windows.
 
+## bench, policy, prune, incident, service, intel
+
+```bash
+sentinel bench .
+sentinel policy .
+sentinel policy . --file weird.enc
+sentinel prune . --max-mb 500
+sentinel incident . --out case.zip
+sentinel service ~/Documents --install
+sentinel intel . --add <sha>
+sentinel intel . --import-file feed.txt
+```
+
+`bench` prints hash rate. `policy` shows tier, rules, config gripes. `prune` trims snaps and logs. `incident` zips a case bundle. `service` prints always on steps per OS. `intel` manages the local sha blocklist.
+
 ## events and timeline
 
 ```bash

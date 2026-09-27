@@ -1,8 +1,8 @@
 # Protection model
 
-Sentinel used to only yell. Now it blocks, if you let it.
+Sentinel blocks, if you let it. Plus vault versions, seals, and case files.
 
-Honest note first: this is userland Python. It stops noisy ransomware, script rats, and junk autostarts cold. It does not stop kernel rootkits or firmware tricks. Pair it with Secure Boot, updates, real backups, and an EDR on high value boxes.
+Honest note first: userland Python stops noisy ransomware, script rats, and junk autostarts cold. It does not stop kernel rootkits or firmware tricks. Pair it with Secure Boot, updates, real backups, and an EDR on high value boxes.
 
 ## Tiers
 
@@ -38,9 +38,25 @@ See it with:
 sentinel quar ~/Documents
 ```
 
-## Vault vs bin quarantine
+## Vault versions and seal
 
-Two jails, different jobs:
+Vault keeps `vault_keep` versions per file (stock 3). Each fill stashes the old copy before overwrite. `protect --restore-clean all` brings the newest pre hit copy back, not post hit junk.
+
+Baseline writes a seal hash of the db. `verify` and `check` warn when the seal breaks, meaning something edited the db outside sentinel.
+
+```bash
+sentinel protect . --restore-clean all
+sentinel prune . --max-mb 500
+sentinel incident . --out case.zip
+sentinel bench .
+sentinel policy .
+```
+
+`prune` trims old snaps and events so long hits do not fill the disk. `incident` zips logs, quar index, and verify state. `bench` prints hash rate so you know what the box can do. `policy` shows tier, rules, config gripes, and explains one file.
+
+## Two jails
+
+Different jobs:
 
 - `.sentinel/vault/` holds pre hit clean copies of your docs. `protect --restore-clean all` brings them back.
 - `.sentinel/binquar/` holds post hit copies of attacker binaries with sha index. Forensics, plus `known_bad` blocks repeat offenders by hash.
@@ -78,6 +94,7 @@ sentinel netscan
 ## Limits
 
 - kernel rootkits: out of scope, use Secure Boot plus EDR
-- slow drip crypto under burst line: caught by `scan` entropy later, not live
-- encrypted vault: vault copies are plain, guard `.sentinel` with disk perms
+- slow drip crypto under burst line: caught by entropy jumps in `check`, not live
+- vault copies are plain, guard `.sentinel` with disk perms
 - network block: sentinel kills procs, it does not firewall. Add host firewall rules for that
+- intel feeds age fast: refresh your blocklist on a schedule

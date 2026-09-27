@@ -179,8 +179,70 @@ def desktop_note(title, detail):
     return False
 
 
-def sarif(scan_rows, root=""):
-    # github code scan shape
+def dir_mb(path):
+    # size walk
+    total = 0
+    for dp, _, fn in os.walk(path):
+        for n in fn:
+            try:
+                total += os.path.getsize(os.path.join(dp, n))
+            except OSError:
+                pass
+    return total / (1024 * 1024)
+
+
+def prune(root, quar_max_mb=500, keep_events=500):
+    # cap disk use, oldest snaps first
+    root = os.path.abspath(root)
+    did = []
+    q = os.path.join(root_dir(root), "quarantine")
+    if os.path.isdir(q) and quar_max_mb > 0:
+        while dir_mb(q) > quar_max_mb:
+            names = sorted(os.listdir(q))
+            if not names:
+                break
+            try:
+                shutil.rmtree(os.path.join(q, names[0]))
+                did.append(f"dropped snap {names[0]}")
+            except OSError:
+                break
+    jp = os.path.join(root_dir(root), JSON_NAME)
+    if os.path.isfile(jp):
+        with open(jp) as f:
+            lines = f.readlines()
+        if len(lines) > keep_events:
+            with open(jp, "w") as f:
+                f.writelines(lines[-keep_events:])
+            did.append(f"trimmed events to {keep_events}")
+    return did
+
+
+def bundle(root, dest=""):
+    # one zip for the grown ups
+    import zipfile
+
+    from . import baseline as _base
+
+    root = os.path.abspath(root)
+    dest = dest or os.path.join(root, f"sentinel-case-{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip")
+    try:
+        v = _base.verify(root)
+    except FileNotFoundError:
+        v = {"changed": [], "new": [], "deleted": [], "meta": {}}
+    with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as z:
+        for name in [LOG_NAME, JSON_NAME, "intel.txt"]:
+            p = os.path.join(root_dir(root), name)
+            if os.path.isfile(p):
+                z.write(p, f".sentinel/{name}")
+        qp = os.path.join(root_dir(root), "binquar", "index.jsonl")
+        if os.path.isfile(qp):
+            z.write(qp, ".sentinel/binquar-index.jsonl")
+        z.writestr("verify.json", json.dumps(v, indent=2))
+        z.writestr("events.json", json.dumps(read_json_log(root, 500), indent=2))
+    return dest
+
+
+def sarif(scan_rows, root=""):    # github code scan shape
     rules = [
         {"id": "sentinel/encrypted", "name": "PossibleEncrypted", "shortDescription": {"text": "file looks encrypted"}},
         {"id": "sentinel/note", "name": "PossibleNote", "shortDescription": {"text": "possible ransom note"}},

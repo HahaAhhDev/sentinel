@@ -17,9 +17,15 @@ Popups work out of the box with a plain message box. Richer toasts need plyer:
 pip install plyer
 ```
 
-## Always on watch
+## Always on
 
-`--daemon` fork is unix only. On Windows use the task wrapper:
+`--daemon` fork is unix only. Pick per OS:
+
+```bash
+sentinel service /home/you/Documents --install
+```
+
+Prints systemd steps on Linux, launchd steps on Mac, and points at `win-task --create` on Windows. Units live in `examples/`.
 
 ```powershell
 sentinel win-task C:\Users\you\Documents --create

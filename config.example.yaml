@@ -1,7 +1,9 @@
 # copy to sentinel.yaml and tweak
 # all of these have sane defaults
+# try --profile home, server, uploads, paranoid
 
 path: "."
+profile: ""
 burst: 25
 window: 10
 cooldown: 30
@@ -13,6 +15,16 @@ kill: false
 
 # vault keeps clean copies for restores
 vault_max_mb: 5
+vault_keep: 3
+
+# quarantine cap in mb
+quar_max_mb: 500
+
+# procs never killed
+allow: []
+
+# per path tweaks
+paths: []
 
 # risk lines for check
 risk_warn: 40
